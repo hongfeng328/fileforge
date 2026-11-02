@@ -360,6 +360,25 @@ def main() -> None:
     port = int(os.environ.get("FILEFORGE_PORT", "8765"))
     mcp.settings.host = host
     mcp.settings.port = port
+    # DNS-rebinding protection: behind the reverse proxy the public Host
+    # header is our domain, which the framework's localhost-only default
+    # would reject ("Invalid Host header"). Allow the public host from
+    # FILEFORGE_PUBLIC_BASE_URL alongside loopback for local health use.
+    from urllib.parse import urlparse
+
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    allowed_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+    allowed_origins = ["http://127.0.0.1:*", "http://localhost:*"]
+    public_host = urlparse(os.environ.get("FILEFORGE_PUBLIC_BASE_URL", "")).netloc
+    if public_host:
+        allowed_hosts.append(public_host)
+        allowed_origins += [f"https://{public_host}", f"http://{public_host}"]
+    mcp.settings.transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=allowed_hosts,
+        allowed_origins=allowed_origins,
+    )
     if downloads.EPHEMERAL_SECRET:
         print(
             "WARNING: FILEFORGE_DOWNLOAD_SECRET is not set; download links "
