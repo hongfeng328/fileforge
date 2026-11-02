@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FileForge - File tools for your AI chat</title>
+<meta name="description" content="FileForge adds deterministic file processing to Claude, ChatGPT and other MCP clients: extract PDF tables to Excel, merge PDFs, combine images into a PDF, and fill PDF forms.">
+<style>
+  :root { --ink:#1c2430; --muted:#5b6572; --line:#e3e7ee; --accent:#2563eb; --bg:#f7f8fa; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color:var(--ink); background:#fff; line-height:1.6; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 20px; }
+  header { padding: 56px 0 8px; text-align:center; }
+  header h1 { font-size: 40px; margin: 0 0 8px; letter-spacing:-0.5px; }
+  header p.tagline { font-size: 19px; color: var(--muted); margin: 0 auto; max-width: 560px; }
+  section { padding: 28px 0; border-top: 1px solid var(--line); margin-top: 28px; }
+  h2 { font-size: 22px; margin: 0 0 14px; }
+  ul.tools { list-style:none; padding:0; margin:0; }
+  ul.tools li { padding: 12px 0; border-bottom: 1px solid var(--line); }
+  ul.tools li:last-child { border-bottom:none; }
+  ul.tools b { display:block; }
+  ul.tools span { color: var(--muted); font-size: 15px; }
+  .cards { display:flex; gap:14px; flex-wrap:wrap; }
+  .card { flex:1 1 180px; border:1px solid var(--line); border-radius:10px; padding:18px; background:var(--bg); }
+  .card .price { font-size:26px; font-weight:700; }
+  .card .name { font-weight:600; margin-bottom:4px; }
+  .card p { margin:6px 0 0; color:var(--muted); font-size:14px; }
+  .badge { display:inline-block; font-size:12px; color:var(--accent); border:1px solid var(--accent); border-radius:999px; padding:1px 8px; margin-left:8px; vertical-align:middle; }
+  footer { border-top:1px solid var(--line); margin-top: 12px; padding: 24px 0 48px; color:var(--muted); font-size:14px; }
+  footer h2 { color: var(--ink); font-size:17px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>FileForge</h1>
+    <p class="tagline">The file toolbox for your AI chat. Extract PDF tables, merge PDFs, turn images into a PDF, and fill PDF forms - right inside Claude, ChatGPT, and any MCP client.</p>
+  </header>
+
+  <section>
+    <h2>Tools</h2>
+    <ul class="tools">
+      <li>
+        <b>PDF tables to Excel</b>
+        <span>Every table in a PDF becomes a clean Excel workbook - one sheet per table, ready to sort, filter, and chart.</span>
+      </li>
+      <li>
+        <b>Merge PDFs</b>
+        <span>Combine any number of PDFs into one file, in exactly the order you choose.</span>
+      </li>
+      <li>
+        <b>Images to PDF</b>
+        <span>Turn a stack of photos or scans (PNG, JPEG) into a single, tidy PDF - one image per page.</span>
+      </li>
+      <li>
+        <b>Fill PDF forms <span class="badge">Coming soon</span></b>
+        <span>Give FileForge the values, and get back a completed, ready-to-send form.</span>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Pricing - simple credit packs</h2>
+    <div class="cards">
+      <div class="card">
+        <div class="name">Free</div>
+        <div class="price">$0</div>
+        <p>5 conversions per month. No card required.</p>
+      </div>
+      <div class="card">
+        <div class="name">Starter pack</div>
+        <div class="price">$6</div>
+        <p>100 credits. Credits never expire.</p>
+      </div>
+      <div class="card">
+        <div class="name">Pro pack</div>
+        <div class="price">$15</div>
+        <p>300 credits. Credits never expire.</p>
+      </div>
+    </div>
+    <p style="color:var(--muted); font-size:14px;">One credit = one tool call, any tool. No subscription, no auto-renewal.</p>
+  </section>
+
+  <section>
+    <h2>Contact</h2>
+    <p>Questions, feedback, or a file format you wish we supported?<br>
+    Email us at <a href="mailto:hongfeng328@outlook.com">hongfeng328@outlook.com</a></p>
+  </section>
+
+  <footer>
+    <h2>Privacy Policy</h2>
+    <p>Effective November 2, 2026. FileForge ("we") provides file-processing tools that run inside AI chat applications through the Model Context Protocol (MCP).</p>
+    <p><b>What we collect.</b> We collect your email address, your credit balance, and usage records (which tool was called, when, and whether it succeeded). Payments are processed by our payment provider, Creem; we never see or store your card number. We do not use advertising trackers.</p>
+    <p><b>Your files.</b> Files you submit are processed only to produce the result you asked for. Uploaded files and generated results are stored temporarily so you can download the result, and are automatically deleted within 24 hours of processing. We never use your files to train models, and we never sell or share your files or personal data with third parties, other than the processors strictly needed to run the service (hosting and payments).</p>
+    <p><b>Your rights.</b> You may ask us at any time what data we hold about you, and to delete your account and data. Email <a href="mailto:hongfeng328@outlook.com">hongfeng328@outlook.com</a> and we will respond within 30 days.</p>
+    <h2>Terms of Service</h2>
+    <p>Effective November 2, 2026. By using FileForge you agree to these terms.</p>
+    <p><b>Service.</b> FileForge provides deterministic file-processing tools (including PDF table extraction, PDF merging, image-to-PDF conversion, and PDF form filling) as an MCP connector for AI chat applications. The service is provided "as is", without warranties of any kind.</p>
+    <p><b>Credits.</b> Paid features are sold as one-time credit packs. One credit pays for one tool call. Credits never expire and are not transferable. If a job fails because of an error on our side, the credit is returned to your balance automatically.</p>
+    <p><b>Refunds.</b> Unused credit packs may be refunded within 14 days of purchase - email us and we will refund the unused portion. Credits already spent on completed jobs are not refundable.</p>
+    <p><b>Acceptable use.</b> You are responsible for having the right to process every file you submit, and you must not use FileForge for unlawful content or purposes. Our total liability is limited to the amount you paid us in the 12 months before the claim. We may update these terms; the current version will always be posted on this page.</p>
+    <p>&copy; 2026 FileForge. All rights reserved.</p>
+  </footer>
+
+</div>
+</body>
+</html>
