@@ -54,6 +54,33 @@ def make_text_pdf(path: Path, marker: str) -> None:
     doc.close()
 
 
+def make_form_pdf(path: Path) -> None:
+    """Build a real fillable form: one text field, one checkbox."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    text_widget = pymupdf.Widget()
+    text_widget.field_name = "full_name"
+    text_widget.rect = pymupdf.Rect(72, 100, 320, 122)
+    text_widget.field_type = pymupdf.PDF_WIDGET_TYPE_TEXT
+    page.add_widget(text_widget)
+    check_widget = pymupdf.Widget()
+    check_widget.field_name = "agree"
+    check_widget.rect = pymupdf.Rect(72, 160, 94, 182)
+    check_widget.field_type = pymupdf.PDF_WIDGET_TYPE_CHECKBOX
+    page.add_widget(check_widget)
+    doc.save(path)
+    doc.close()
+
+
+def read_form_values(path: Path) -> dict:
+    values = {}
+    with pymupdf.open(path) as doc:
+        for page in doc:
+            for widget in page.widgets() or []:
+                values[widget.field_name] = widget.field_value
+    return values
+
+
 def make_image(path: Path, color: str, label: str) -> None:
     img = Image.new("RGB", (400, 300), color)
     draw = ImageDraw.Draw(img)
@@ -127,12 +154,39 @@ def main() -> int:
         )
     )
 
-    # --- test 4: pdf_form_fill is an explicit stub ------------------------
+    # --- test 4: pdf_form_fill -------------------------------------------
+    form_pdf = SAMPLES / "form.pdf"
+    make_form_pdf(form_pdf)
+    info = tools.pdf_form_fill(str(form_pdf), {"full_name": "Ada Lovelace", "agree": "true"})
+    values = read_form_values(Path(info["file_path"]))
+    results.append(
+        check(
+            "pdf_form_fill: text + checkbox filled and readable",
+            values.get("full_name") == "Ada Lovelace" and values.get("agree") == "Yes",
+            f"values={values} filled={info['fields_filled']}",
+        )
+    )
     try:
-        tools.pdf_form_fill(str(pdf_a), {"name": "x"})
-        results.append(check("pdf_form_fill: stub raises NotImplementedError", False))
-    except NotImplementedError:
-        results.append(check("pdf_form_fill: stub raises NotImplementedError", True))
+        tools.pdf_form_fill(str(form_pdf), {"nmae": "typo"})
+        results.append(check("pdf_form_fill: unknown field rejected", False))
+    except ValueError as exc:
+        results.append(
+            check(
+                "pdf_form_fill: unknown field rejected, available listed",
+                "full_name" in str(exc) and "agree" in str(exc),
+                str(exc)[:90],
+            )
+        )
+    try:
+        tools.pdf_form_fill(str(form_pdf), {"agree": "maybe"})
+        results.append(check("pdf_form_fill: bad checkbox value rejected", False))
+    except ValueError:
+        results.append(check("pdf_form_fill: bad checkbox value rejected", True))
+    try:
+        tools.pdf_form_fill(str(pdf_a), {"full_name": "x"})
+        results.append(check("pdf_form_fill: field-less PDF rejected", False))
+    except ValueError:
+        results.append(check("pdf_form_fill: field-less PDF rejected", True))
 
     print(f"\n{sum(results)}/{len(results)} checks passed")
     return 0 if all(results) else 1

@@ -56,7 +56,12 @@ async def run_client() -> None:
                 tools_result = await session.list_tools()
                 names = sorted(t.name for t in tools_result.tools)
                 print(f"tools listed over Streamable HTTP: {names}")
-                assert names == ["images_to_pdf", "merge_pdfs", "pdf_tables_to_excel"], names
+                assert names == [
+                    "images_to_pdf",
+                    "merge_pdfs",
+                    "pdf_form_fill",
+                    "pdf_tables_to_excel",
+                ], names
                 for t in tools_result.tools:
                     assert t.title, f"tool {t.name} is missing a title"
                     assert len(t.name) <= 64, f"tool name too long: {t.name}"

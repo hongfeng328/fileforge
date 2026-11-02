@@ -190,25 +190,120 @@ def images_to_pdf(image_paths: list[str], dpi: int = 200) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Tool 4 (interface only): pdf_form_fill
+# Tool 4: pdf_form_fill
 # ---------------------------------------------------------------------------
 
-def pdf_form_fill(pdf_path: str, fields: dict[str, str]) -> dict[str, Any]:
+_TRUE_WORDS = {"true", "yes", "on", "1", "checked"}
+_FALSE_WORDS = {"false", "no", "off", "0", "unchecked", ""}
+
+
+def _fill_checkbox(widget: Any, raw: str, name: str) -> None:
+    word = raw.strip().lower()
+    if word in _TRUE_WORDS:
+        widget.field_value = widget.on_state()
+    elif word in _FALSE_WORDS:
+        widget.field_value = False
+    elif raw == widget.on_state():
+        widget.field_value = widget.on_state()
+    else:
+        raise ValueError(
+            f"Field '{name}' is a checkbox; use true/false (got {raw!r})."
+        )
+    widget.update()
+
+
+def pdf_form_fill(
+    pdf_path: str, fields: dict[str, str], flatten: bool = False
+) -> dict[str, Any]:
     """Fill a fillable PDF form's fields with the given values.
 
-    TODO(form-fill): not implemented in this MVP skeleton.
-    Implementation sketch:
-    - Open with pymupdf; iterate ``page.widgets()`` to list field names
-      and types, match against ``fields`` keys, set ``widget.field_value``
-      and call ``widget.update()``.
-    - Decide policy for unknown field names (reject vs ignore) and for
-      checkbox/radio widgets (value conventions differ).
-    - Optionally flatten the result so values cannot be edited.
-    Do NOT register this tool on the MCP server until it is implemented
-    and covered by a self test - a directory review would fail on a
-    tool that always errors.
+    Policies (decided for launch; the tool description states them so
+    callers can rely on them):
+    - Unknown field names are REJECTED: the error lists every available
+      field, so a typo never silently produces an unfilled form.
+    - Fields not mentioned in ``fields`` are left untouched.
+    - Checkboxes accept true/false (also yes/no, on/off, 1/0), or the
+      checkbox's own on-state name.
+    - Radio groups: the value must be the on-state name of one option
+      in the group (commonly like "Choice1"); the error lists options.
+    - Choice (dropdown/list) fields: the value must be one of the
+      field's defined choices when the field defines any.
+    - ``flatten=True`` bakes the values into the page content so the
+      result is no longer editable.
+    - Signature fields are never filled.
     """
-    raise NotImplementedError("pdf_form_fill is not implemented yet (MVP skeleton).")
+    if not fields:
+        raise ValueError("pdf_form_fill needs at least one field value.")
+    src = _require_file(pdf_path, "PDF")
+
+    with pymupdf.open(src) as doc:
+        if doc.page_count > limits.MAX_PDF_PAGES:
+            raise ValueError(
+                f"PDF has {doc.page_count} pages; the limit is {limits.MAX_PDF_PAGES} pages."
+            )
+        if doc.needs_pass:
+            raise ValueError("Password-protected PDFs are not supported.")
+
+        # Index widgets: name -> list of widgets (radio groups have many).
+        by_name: dict[str, list[Any]] = {}
+        for page in doc:
+            for widget in page.widgets() or []:
+                by_name.setdefault(widget.field_name, []).append(widget)
+
+        if not by_name:
+            raise ValueError(
+                "This PDF has no fillable form fields. (It may be a flat "
+                "scan or a form printed as plain graphics.)"
+            )
+        unknown = sorted(set(fields) - set(by_name))
+        if unknown:
+            available = ", ".join(sorted(by_name))
+            raise ValueError(
+                f"Unknown field name(s): {', '.join(unknown)}. "
+                f"Available fields in this form: {available}."
+            )
+
+        filled: list[str] = []
+        for name, raw_value in fields.items():
+            widgets = by_name[name]
+            kind = widgets[0].field_type_string
+            if kind == "CheckBox":
+                for w in widgets:
+                    _fill_checkbox(w, str(raw_value), name)
+            elif kind == "RadioButton":
+                states = [str(w.on_state()) for w in widgets]
+                if str(raw_value) not in states:
+                    raise ValueError(
+                        f"Field '{name}' is a radio group; value must be one "
+                        f"of: {', '.join(states)} (got {raw_value!r})."
+                    )
+                for w in widgets:
+                    w.field_value = w.on_state() if str(w.on_state()) == str(raw_value) else False
+                    w.update()
+            elif kind in ("ComboBox", "ListBox"):
+                choices = widgets[0].choice_values or []
+                if choices and str(raw_value) not in [str(c) for c in choices]:
+                    raise ValueError(
+                        f"Field '{name}' must be one of: "
+                        f"{', '.join(str(c) for c in choices)} (got {raw_value!r})."
+                    )
+                for w in widgets:
+                    w.field_value = str(raw_value)
+                    w.update()
+            elif kind == "Signature":
+                raise ValueError(f"Field '{name}' is a signature field and cannot be filled.")
+            else:  # Text and anything else text-like
+                for w in widgets:
+                    w.field_value = str(raw_value)
+                    w.update()
+            filled.append(name)
+
+        if flatten:
+            doc.bake()
+        out = _output_path(src.stem + "_filled", ".pdf")
+        doc.save(out)
+
+    return _file_info(out, fields_filled=len(filled), fields=filled, flattened=flatten)
 
 
 # ---------------------------------------------------------------------------

@@ -64,11 +64,11 @@ mcp = FastMCP(
     "FileForge",
     instructions=(
         "FileForge performs deterministic file processing: extract tables "
-        "from a PDF into Excel, merge PDFs, and combine images into a PDF. "
-        "Send file contents as base64-encoded strings. Each call returns a "
-        "download_url for the produced file; download links expire after "
-        "24 hours and files are then deleted. Each call costs 1 credit; "
-        "the free plan includes 5 calls per month."
+        "from a PDF into Excel, merge PDFs, combine images into a PDF, and "
+        "fill fillable PDF forms. Send file contents as base64-encoded "
+        "strings. Each call returns a download_url for the produced file; "
+        "download links expire after 24 hours and files are then deleted. "
+        "Each call costs 1 credit; the free plan includes 5 calls per month."
     ),
 )
 
@@ -241,6 +241,34 @@ async def images_to_pdf(ctx: Context, images_base64: list[str], dpi: int = 200) 
             storage.discard(paths)
 
     return await _run_tool(ctx, "images_to_pdf", work)
+
+
+@mcp.tool(
+    title="Fill a PDF form",
+    description=(
+        "Fill the fields of a fillable PDF form and return the completed "
+        "form. Input: the PDF's contents as a base64-encoded string, plus "
+        "a fields object mapping field names to values. Unknown field "
+        "names are rejected with a list of the form's real fields. "
+        "Checkboxes accept true/false; radio groups take the chosen "
+        "option's name; dropdowns take one of their defined choices. "
+        "Set flatten=true to bake values in so they can no longer be "
+        "edited. Returns a download_url for the filled PDF (link valid "
+        "24 hours). Costs 1 credit; 5 free calls per month."
+    ),
+    annotations=_WRITE_ANNOTATIONS,
+)
+async def pdf_form_fill(
+    ctx: Context, pdf_base64: str, fields: dict[str, str], flatten: bool = False
+) -> dict[str, Any]:
+    def work() -> dict[str, Any]:
+        path = storage.materialize(pdf_base64, "pdf")
+        try:
+            return tools.pdf_form_fill(str(path), fields, flatten=flatten)
+        finally:
+            storage.discard([path])
+
+    return await _run_tool(ctx, "pdf_form_fill", work)
 
 
 # ---------------------------------------------------------------------------

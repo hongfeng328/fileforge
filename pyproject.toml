@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fileforge"
-version = "0.2.0"
+version = "0.3.0"
 description = "FileForge - deterministic file processing tools (PDF tables, merge, images) exposed as a remote MCP server."
 requires-python = ">=3.10"
 dependencies = [

@@ -30,7 +30,7 @@ Dependencies (mature OSS only): `mcp` (official Python SDK, pinned
 | `pdf_tables_to_excel` | ✅ implemented + self-tested | pdfplumber table extraction → one xlsx sheet per table. Fails with a clear message when no ruled/aligned tables are detectable. |
 | `merge_pdfs` | ✅ implemented + self-tested | pymupdf `insert_pdf`, order-preserving, requires ≥ 2 inputs. |
 | `images_to_pdf` | ✅ implemented + self-tested | One image per page, page sized to image aspect at 200 DPI; converts non-RGB inputs. |
-| `pdf_form_fill` | 🚧 interface only | Stub raising `NotImplementedError`, with an implementation sketch in its docstring. **Not registered on the server** - a permanently erroring tool would fail directory review. |
+| `pdf_form_fill` | ✅ implemented + self-tested | pymupdf widgets. Unknown field names are rejected with the form's real field list; checkboxes accept true/false; radio groups take the option's on-state name; dropdowns validate against defined choices; optional `flatten` bakes values in. Registered on the server since v0.3. |
 
 All tool names are ≤ 64 characters (Claude directory requirement) and
 carry a human `title` plus a plain-language description.
@@ -126,10 +126,7 @@ a visible contact email and legal pages on the site).
 
 ## TODO (next steps, in order)
 
-1. **pdf_form_fill implementation** - pymupdf widgets; decide unknown
-   field policy, checkbox/radio value conventions, flattening; add a
-   self test with a real fillable form; only then register the tool.
-2. **Deployment** - public HTTPS endpoint, isolated from other
+1. **Deployment** - public HTTPS endpoint, isolated from other
    workloads on the target host (dedicated user/systemd service/port/
    subdomain, CPU/memory limits). Plan first, deploy after owner
    confirmation.
