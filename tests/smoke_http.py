@@ -61,12 +61,17 @@ async def run_client() -> None:
                     assert t.title, f"tool {t.name} is missing a title"
                     assert len(t.name) <= 64, f"tool name too long: {t.name}"
 
+                import base64
+
                 sample = PROJECT_ROOT / "samples" / "one.png"
+                payload = base64.b64encode(sample.read_bytes()).decode()
                 result = await session.call_tool(
-                    "images_to_pdf", {"image_paths": [str(sample)]}
+                    "images_to_pdf", {"images_base64": [payload]}
                 )
                 assert not result.isError, result.content
-                print(f"remote images_to_pdf call OK: {result.content[0].text[:120]}...")
+                text = result.content[0].text
+                assert "download_expires_at" in text, text
+                print(f"remote images_to_pdf call OK: {text[:120]}...")
 
 
 def main() -> int:

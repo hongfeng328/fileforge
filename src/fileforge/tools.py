@@ -23,6 +23,10 @@ import pymupdf
 from openpyxl import Workbook
 from PIL import Image
 
+from fileforge import limits
+
+Image.MAX_IMAGE_PIXELS = limits.MAX_IMAGE_PIXELS
+
 # Output directory: overridable via env for deployment; defaults to the
 # project-local output/ folder (repo_root/output).
 _DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[2] / "output"
@@ -79,6 +83,10 @@ def pdf_tables_to_excel(pdf_path: str) -> dict[str, Any]:
 
     tables_found = 0
     with pdfplumber.open(src) as pdf:
+        if len(pdf.pages) > limits.MAX_PDF_PAGES:
+            raise ValueError(
+                f"PDF has {len(pdf.pages)} pages; the limit is {limits.MAX_PDF_PAGES} pages."
+            )
         for page_no, page in enumerate(pdf.pages, start=1):
             for table_no, table in enumerate(page.extract_tables() or [], start=1):
                 if not table:
@@ -108,11 +116,23 @@ def merge_pdfs(pdf_paths: list[str]) -> dict[str, Any]:
     if not pdf_paths or len(pdf_paths) < 2:
         raise ValueError("merge_pdfs needs at least two PDF files.")
 
+    if len(pdf_paths) > limits.MAX_FILES_PER_CALL:
+        raise ValueError(f"Too many files: the limit is {limits.MAX_FILES_PER_CALL} per call.")
+
     merged = pymupdf.open()
     try:
         for path_str in pdf_paths:
             src = _require_file(path_str, "PDF")
             with pymupdf.open(src) as doc:
+                if doc.page_count > limits.MAX_PDF_PAGES:
+                    raise ValueError(
+                        f"PDF has {doc.page_count} pages; the limit is "
+                        f"{limits.MAX_PDF_PAGES} pages per file."
+                    )
+                if merged.page_count + doc.page_count > limits.MAX_MERGED_PAGES:
+                    raise ValueError(
+                        f"Merged result would exceed {limits.MAX_MERGED_PAGES} pages."
+                    )
                 merged.insert_pdf(doc)
         out = _output_path("merged", ".pdf")
         merged.save(out)
@@ -134,12 +154,19 @@ def images_to_pdf(image_paths: list[str], dpi: int = 200) -> dict[str, Any]:
     """
     if not image_paths:
         raise ValueError("images_to_pdf needs at least one image file.")
+    if len(image_paths) > limits.MAX_FILES_PER_CALL:
+        raise ValueError(f"Too many files: the limit is {limits.MAX_FILES_PER_CALL} per call.")
 
     doc = pymupdf.open()
     try:
         for path_str in image_paths:
             src = _require_file(path_str, "image")
             with Image.open(src) as img:
+                if img.width * img.height > limits.MAX_IMAGE_PIXELS:
+                    raise ValueError(
+                        f"Image is {img.width * img.height:,} pixels; the limit is "
+                        f"{limits.MAX_IMAGE_PIXELS:,} pixels."
+                    )
                 rgb = img.convert("RGB")
                 width_pt = rgb.width * 72.0 / dpi
                 height_pt = rgb.height * 72.0 / dpi

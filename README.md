@@ -13,8 +13,11 @@ Two layers, deliberately separated:
 
 | Layer | File | Responsibility |
 |---|---|---|
-| Tools | `src/fileforge/tools.py` | Pure functions. Take local file paths, write results to `output/`, return a dict describing the produced file. No MCP imports - unit-testable, reusable behind a future web API. |
-| Transport | `src/fileforge/server.py` | Thin FastMCP (streamable-http) wrapper. Registers tools with titles, descriptions and annotations; owns host/port config. |
+| Tools | `src/fileforge/tools.py` | Pure functions. Take local file paths, write results to `output/`, return a dict describing the produced file. No MCP imports - unit-testable, reusable behind a future web API. Page/pixel caps live here too (defence in depth). |
+| Inbound | `src/fileforge/storage.py` + `limits.py` | Turns base64 payloads from remote clients into validated, short-lived local files: strict base64, size caps (PDF 25 MB, image 15 MB), magic-byte type sniffing, PDF page cap (500), image pixel cap (40 MP), password-protected PDFs rejected. |
+| Transport | `src/fileforge/server.py` | FastMCP (streamable-http) wrapper. Tool signatures take base64 payloads; owns billing wrapper, rate limiting, per-call timeout, and the plain HTTP routes (`/health`, `/download/<token>`, `/webhooks/creem`, `/v1/balance`, `/v1/keys`). |
+| Downloads | `src/fileforge/downloads.py` + `janitor.py` | Signed (HMAC-SHA256), expiring download tokens; expiry = file deletion time. The janitor deletes outputs after 24h (the landing page's privacy promise) and stray inputs after 1h; runnable standalone (`python -m fileforge.janitor`), as an in-server thread, or from a systemd timer. |
+| Billing | `src/fileforge/billing.py` + `admin.py` | SQLite ledger. API keys (`Authorization: Bearer ff_...`, only hashes stored), 1 credit per call, paid credits spent first then 5 free calls/month (UTC), automatic refund when a call fails, Creem `checkout.completed` webhook (HMAC signature verified, idempotent by event id and order id) grants 100/300-credit packs; `refund.created` claws back. Admin CLI: `python -m fileforge.admin create-key/balance/grant/list-accounts`. Billing is OFF unless `FILEFORGE_BILLING_MODE=on`. |
 
 Dependencies (mature OSS only): `mcp` (official Python SDK, pinned
 `>=1.2,<2` - 2.x renamed FastMCP), `pymupdf`, `pdfplumber`, `openpyxl`,
@@ -41,7 +44,12 @@ python3 -m venv .venv
 
 # boot the server (endpoint: http://127.0.0.1:8765/mcp)
 PYTHONPATH=src .venv/bin/python -m fileforge.server
-# env overrides: FILEFORGE_HOST, FILEFORGE_PORT, FILEFORGE_OUTPUT_DIR
+# key env: FILEFORGE_HOST, FILEFORGE_PORT, FILEFORGE_OUTPUT_DIR,
+# FILEFORGE_PUBLIC_BASE_URL (enables download_url in results),
+# FILEFORGE_DOWNLOAD_SECRET, FILEFORGE_BILLING_MODE=on,
+# CREEM_WEBHOOK_SECRET, CREEM_PRODUCT_STARTER_ID, CREEM_PRODUCT_PRO_ID,
+# FILEFORGE_ADMIN_TOKEN, FILEFORGE_JANITOR_ENABLE=1
+# full list in src/fileforge/server.py's docstring.
 ```
 
 ## Self tests
@@ -54,7 +62,28 @@ PYTHONPATH=src .venv/bin/python tests/run_selftest.py
 # 2) transport smoke test: official MCP client against the real
 #    Streamable HTTP app (initialize, tools/list, tools/call)
 PYTHONPATH=src .venv/bin/python tests/smoke_http.py
+
+# 3) remote-layer tests: storage validation, signed downloads, janitor,
+#    billing ledger, Creem webhook (no network, throwaway DB)
+PYTHONPATH=src .venv/bin/python tests/run_remote_tests.py
+
+# 4) billing-on end-to-end: anon free quota, key auth, paid charge,
+#    failure refund, signed download over HTTP, webhook credit grant
+PYTHONPATH=src .venv/bin/python tests/smoke_billing_http.py
 ```
+
+### Results (2026-11-02, v0.2 remote layer)
+
+- `tests/run_selftest.py` - 5/5 passed (unchanged tool layer).
+- `tests/run_remote_tests.py` - **26/26 passed**: base64 ingest
+  (happy path + wrong-type/garbage/invalid/empty rejected), signed
+  download tokens (round-trip, tamper, expiry, path traversal), janitor
+  24h sweep, billing (key auth, free quota exhaustion, paid-first
+  spending, exactly-once refund, anon buckets), Creem webhook
+  (signature verify, +100 credits, duplicate event ignored, unknown
+  product reported not guessed).
+- `tests/smoke_http.py` - passed (new base64 tool signature).
+- `tests/smoke_billing_http.py` - **12/12 passed** with billing on.
 
 ### Results (2026-11-02, this machine)
 
@@ -100,30 +129,26 @@ a visible contact email and legal pages on the site).
 1. **pdf_form_fill implementation** - pymupdf widgets; decide unknown
    field policy, checkbox/radio value conventions, flattening; add a
    self test with a real fillable form; only then register the tool.
-2. **File ingress** - tools currently take local paths. For a remote
-   server, clients must be able to get files in: accept base64 payloads
-   or pre-signed upload URLs, with size/type limits.
-3. **Download links & expiry cleanup** - return signed, expiring URLs
-   for outputs instead of local paths; a janitor job deletes output
-   files after the expiry window (privacy promise on the landing page
-   depends on this).
-4. **Credit/billing layer** - API-key auth per user, credit balance,
-   one credit per tool call, free-tier monthly quota (5), Creem checkout
-   for packs ($6/100, $15/300). Keep billing OUT of `tools.py`; enforce
-   in the transport layer or a middleware.
-5. **Directory submission assets** - reviewer test account, listing
-   copy, icon. Claude directory additionally requires: HTTPS endpoint,
-   tool annotations (done), and a paid Claude plan on the submitting
-   account.
-6. **Deployment isolation** - the target server also runs other,
-   unrelated workloads. Deploy FileForge as its own systemd service
-   under a dedicated user, bound
-   to its own port, behind its own (sub)domain + HTTPS (Caddy/nginx);
-   never share the output directory or env files with other services;
-   set CPU/memory limits so a malformed PDF cannot starve neighbours.
-7. **Hardening before public launch** - request size caps, per-key rate
-   limits, timeouts per tool call, sanitize file names (done in
-   `_output_path`), scan for zip-bomb-style PDFs (page/pixel caps).
+2. **Deployment** - public HTTPS endpoint, isolated from other
+   workloads on the target host (dedicated user/systemd service/port/
+   subdomain, CPU/memory limits). Plan first, deploy after owner
+   confirmation.
+3. **Directory submission assets** - reviewer test account, listing
+   copy, icon, `server.json`. Claude directory additionally requires:
+   HTTPS endpoint, tool annotations (done), and a paid Claude plan on
+   the submitting account. Free registries first (Smithery, official
+   MCP Registry, Glama).
+4. **Known MVP trade-offs to revisit** - (a) buyers claim their API
+   key by email after purchase; add email verification before real
+   volume. (b) Anonymous free quota is bucketed by client-IP hash;
+   shared NATs share a bucket. (c) Claude/ChatGPT connector UIs may
+   not let users set a Bearer header - paid users on those surfaces
+   need OAuth later; the free tier works there today.
+
+Done in v0.2: file ingress (base64 + limits), signed expiring download
+links + 24h janitor, credit/billing layer with Creem webhook, and the
+launch hardening set (payload caps, per-account rate limit 30/min,
+120s per-call timeout, sanitised file names, page/pixel caps).
 
 ## Layout
 
@@ -133,11 +158,21 @@ fileforge/
 ├── src/fileforge/
 │   ├── __init__.py
 │   ├── tools.py        # pure tool functions
-│   └── server.py       # FastMCP streamable-http transport
+│   ├── storage.py      # base64 ingest + validation
+│   ├── limits.py       # central safety limits (env-tunable)
+│   ├── downloads.py    # signed expiring download tokens
+│   ├── janitor.py      # 24h expiry cleanup
+│   ├── billing.py      # credit ledger, API keys, Creem webhook logic
+│   ├── admin.py        # admin CLI (keys, balances, manual grants)
+│   └── server.py       # FastMCP streamable-http transport + HTTP routes
 ├── tests/
-│   ├── run_selftest.py # tool-level tests (generates fixtures)
-│   └── smoke_http.py   # MCP-over-HTTP smoke test
+│   ├── run_selftest.py      # tool-level tests (generates fixtures)
+│   ├── run_remote_tests.py  # storage/downloads/billing/webhook tests
+│   ├── smoke_http.py        # MCP-over-HTTP smoke test (billing off)
+│   └── smoke_billing_http.py# MCP-over-HTTP smoke test (billing on)
 ├── landing/index.html  # static landing page draft
 ├── samples/            # generated test fixtures (gitignored)
-└── output/             # produced files (gitignored)
+├── incoming/           # materialised uploads, deleted after each call
+├── data/               # billing sqlite DB (gitignored)
+└── output/             # produced files, deleted after 24h (gitignored)
 ```
